@@ -5,16 +5,26 @@ this repository; if a rule is not stated, use ordinary judgement.
 
 ## What this project is
 
-WhisperQ transcribes long recordings (originally university lectures) with
-[WhisperX](https://github.com/m-bain/whisperX), labels who spoke via pyannote
-speaker diarization, and attaches the result to the source video as a subtitle
-track.
+WhisperQ turns a folder of long recordings (originally university lectures) into
+speaker-labelled transcripts and subtitled video.
 
-The reason it exists as a project rather than a one-line `whisperx` invocation:
-getting diarization to run at usable speed on Apple Silicon requires splitting
-the pipeline across two devices and working around a dynamic-linker conflict.
-Neither is discoverable from the WhisperX docs. That knowledge is encoded in
-`scripts/config.sh` and `scripts/mps_pipeline.py`.
+It is an orchestration layer, not an ASR engine. The transcription and
+diarization come from [WhisperX](https://github.com/m-bain/whisperX) and
+pyannote. WhisperQ contributes four things those don't provide, and they are
+what the code is mostly made of:
+
+1. **The device split** — ASR on CPU, diarization on MPS. Not a tuning choice;
+   the only arrangement that works (see Constraints).
+2. **The ffmpeg@7 linker workaround** — otherwise diarization dies in a native
+   library with no usable traceback.
+3. **Batch behaviour** — resumable skip logic, atomic locks for parallel
+   workers, largest-first ordering.
+4. **Readable subtitles** — WhisperX emits one cue per *word*; WhisperQ rebuilds
+   segment-level cues and repairs overlaps.
+
+When editing, keep that boundary in mind: bugs in transcription quality are
+usually upstream (label them `upstream`), bugs in resumption, ordering, paths,
+or subtitle presentation are ours.
 
 **Currently macOS/Apple Silicon only.** See `docs/BUILD_PLAN.md` for the
 cross-platform roadmap and exactly which lines block Linux and Windows.

@@ -1,32 +1,43 @@
 # WhisperQ
 
-Transcribe long recordings with [WhisperX](https://github.com/m-bain/whisperX),
-label who spoke via pyannote diarization, and attach the result to the video as
-a subtitle track.
+Turn a folder of long recordings into speaker-labelled transcripts and subtitled
+video. Point it at `input/`, run it, come back later.
 
-Built for lecture recordings — multi-hour, multi-speaker, and too many of them
-to babysit one at a time.
+Built for lecture recordings — multi-hour, multi-speaker, and too many of them to
+babysit one at a time.
 
 > **macOS / Apple Silicon only right now.** Three of the four things blocking
 > Linux live in a single 90-line file. See [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
 
-## Why this exists
+## Why WhisperQ exists
 
-`pip install whisperx` gets you transcription. It does not get you diarization
-running at a usable speed on a Mac. Two things stand in the way, neither of them
-documented upstream:
+[WhisperX](https://github.com/m-bain/whisperX) gives you transcription and
+diarization. What it doesn't give you is either of them running at a usable
+speed on a Mac, or an answer for what to do with 40 files. WhisperQ is the layer
+that solves both.
 
-- **CTranslate2 — WhisperX's ASR backend — has no Metal backend.** Passing
-  `device="mps"` doesn't raise an error; it silently degrades. Only the pyannote
-  diarization stage can use the GPU, where it runs roughly **8× faster** than on
-  CPU. `scripts/mps_pipeline.py` splits the pipeline accordingly: ASR and
-  alignment on CPU, diarization on MPS.
-- **torchcodec (via pyannote 4.x) links against ffmpeg 4–7**, but Homebrew's
-  default `ffmpeg` is v8. The mismatch fails inside a native library, so the
-  Python traceback is useless and never mentions ffmpeg. `scripts/config.sh`
-  points the dynamic loader at the `ffmpeg@7` libs.
+**The device split.** The obvious move on Apple Silicon — put everything on the
+GPU — cannot work. CTranslate2, the ASR backend, has no Metal backend at all,
+and passing `device="mps"` doesn't raise an error; it silently degrades. Only
+the pyannote diarization stage genuinely benefits from MPS, where it runs
+roughly **8× faster** than on CPU. WhisperQ splits the pipeline accordingly:
+ASR and alignment on CPU, diarization on MPS.
 
-That knowledge is the actual content of this repo. The rest is plumbing.
+**The linker conflict.** torchcodec, pulled in by pyannote 4.x, links against
+ffmpeg 4–7 shared libraries. Homebrew's default `ffmpeg` is v8. The mismatch
+fails inside a native library, so the Python traceback is useless and never
+mentions ffmpeg. WhisperQ points the dynamic loader at the `ffmpeg@7` libs and
+warns you if they're missing.
+
+**Batch behaviour.** Finished files are skipped, so an interrupted run resumes
+instead of restarting. Work is claimed with atomic locks, so parallel workers
+never collide. Files run largest-first, so a long one doesn't strand the other
+workers idle at the end.
+
+**Readable subtitles.** WhisperX's word-level `.srt` is one cue per *word* —
+unusable on screen. WhisperQ rebuilds segment-level cues from the `.json`,
+repairs overlapping and zero-length cues that some players reject outright, and
+prints a speaker label only when the speaker actually changes.
 
 ## Layout
 
@@ -79,8 +90,7 @@ python scripts/build_clean_srt.py    # -> output/transcripts/*.clean.srt
 
 Already-transcribed files are skipped. `FORCE=1` reprocesses everything.
 
-`mp4 m4a mov mkv wav mp3 webm` are all accepted; files are processed
-largest-first so a parallel run doesn't end with one lane grinding alone.
+`mp4 m4a mov mkv wav mp3 webm` are all accepted.
 
 ### Subtitles: soft vs hard
 
@@ -101,6 +111,17 @@ player or upload.
   those files.
 - Completion is judged on the `.json`, not the `.srt`. The `.srt` is written
   incrementally, so a killed run leaves a truncated one that looks finished.
+
+## Built on
+
+WhisperQ is orchestration around excellent upstream work:
+
+| | |
+|---|---|
+| [WhisperX](https://github.com/m-bain/whisperX) | ASR, forced alignment, diarization plumbing (BSD-2) |
+| [pyannote.audio](https://github.com/pyannote/pyannote-audio) | Speaker diarization models (MIT; models separately licence-gated) |
+| [CTranslate2](https://github.com/OpenNMT/CTranslate2) | Fast Whisper inference (MIT) |
+| [ffmpeg](https://ffmpeg.org) | Decoding and muxing |
 
 ## Contributing
 

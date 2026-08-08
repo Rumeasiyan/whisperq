@@ -5,14 +5,14 @@
 
 Usage:  python scripts/mps_pipeline.py ["file1.mp4" ...]
         With no args, processes every media file in input/.
-Skips any file that already has a real .srt in OUTDIR. Models are loaded once
+Skips any file already transcribed (see is_done in paths.py). Models are loaded once
 and reused; audio is freed after each file so RAM stays flat.
 """
 import os, sys, gc, time
 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")  # unsupported ops -> CPU
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from paths import OUTDIR, list_media
+from paths import OUTDIR, list_media, is_done
 
 import torch
 import whisperx
@@ -34,9 +34,7 @@ def main(files):
     torch.set_num_threads(THREADS)
     writer = get_writer("all", OUTDIR)
 
-    todo = [f for f in files if not os.path.isfile(
-        os.path.join(OUTDIR, os.path.splitext(os.path.basename(f))[0] + ".srt"))
-        or os.path.getsize(os.path.join(OUTDIR, os.path.splitext(os.path.basename(f))[0] + ".srt")) == 0]
+    todo = [f for f in files if not is_done(f)]
     log(f"{len(todo)}/{len(files)} files to process (rest already done)")
     if not todo:
         return

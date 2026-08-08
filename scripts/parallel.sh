@@ -11,7 +11,7 @@ WORKERS="${1:-2}"
 LOCKDIR="$OUTDIR/.locks"
 mkdir -p "$LOCKDIR"
 
-mapfile -t FILES < <(list_media)
+read_media_into FILES
 echo "Pool: $WORKERS workers, ${#FILES[@]} candidate files."
 
 worker() {

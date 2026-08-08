@@ -40,16 +40,28 @@ fi
 
 # Print every media file in input/, one per line, largest-first so parallel
 # workers stay balanced (big files start early instead of straggling at the end).
+# macOS ships bash 3.2, so no mapfile/readarray anywhere in these scripts.
 list_media() {
-  local args=()
+  local args=() ext first=1
   for ext in "${MEDIA_EXTS[@]}"; do
-    args+=(-iname "*.${ext}" -o)
+    if [[ $first -eq 1 ]]; then first=0; else args+=(-o); fi
+    args+=(-iname "*.${ext}")
   done
-  unset 'args[${#args[@]}-1]'   # drop trailing -o
   find "$INDIR" -maxdepth 1 -type f \( "${args[@]}" \) -print0 \
     | xargs -0 stat -f '%z %N' \
     | sort -rn \
     | cut -d' ' -f2-
+}
+
+# Read list_media() output into an array named by $1. Newline-delimited, so a
+# filename containing a newline would break it -- none do, and the alternative
+# (NUL-delimited read) needs bash 4.
+read_media_into() {
+  local __name="$1" __line
+  eval "$__name=()"
+  while IFS= read -r __line; do
+    [[ -n "$__line" ]] && eval "$__name+=(\"\$__line\")"
+  done < <(list_media)
 }
 
 # True when $1 (a media path) has already been transcribed and needs no rerun.

@@ -11,7 +11,7 @@ LANG="en"
 DEVICE="cpu"
 COMPUTE="int8"
 
-mapfile -t files < <(list_media)
+read_media_into files
 echo "Found ${#files[@]} recordings in $INDIR."
 
 for f in "${files[@]}"; do

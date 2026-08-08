@@ -1,0 +1,37 @@
+# --- secrets ---
+.env
+
+# --- python env ---
+.venv/
+__pycache__/
+*.pyc
+
+# --- media in / out ---
+# Everything under input/ and output/ is generated or source media. Never commit.
+# The .gitkeep files keep the directory structure in the repo.
+input/*
+!input/.gitkeep
+output/**
+!output/transcripts/
+!output/subbed/
+!output/**/.gitkeep
+
+# Belt-and-braces: media + transcript artefacts anywhere in the tree.
+*.mp4
+*.m4a
+*.mov
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.srt
+*.vtt
+*.tsv
+*.json
+*.log
+
+# --- os cruft ---
+.DS_Store
+
+# --- old history backup (delete once you're happy) ---
+.git.bak-*/

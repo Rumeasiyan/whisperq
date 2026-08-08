@@ -65,11 +65,17 @@ read_media_into() {
 }
 
 # True when $1 (a media path) has already been transcribed and needs no rerun.
+# Every script's skip logic hangs off this one predicate.
 #
-# TODO(you): implement this. See the note in the conversation — this predicate
-# decides what "already done" means, and every script's skip logic hangs off it.
+# Completion is judged on the .json, not the .srt. WhisperX writes the .srt
+# incrementally, so a run killed midway leaves a plausible-looking partial .srt
+# that a size check would treat as finished forever. The .json is written once,
+# at the end, after diarization -- its presence means the whole pipeline ran.
+#
+# FORCE=1 reprocesses everything:  FORCE=1 ./scripts/transcribe.sh
 is_done() {
   local src="$1"
+  [[ "${FORCE:-0}" == "1" ]] && return 1
   local base; base="$(basename "${src%.*}")"
-  return 1
+  [[ -s "$OUTDIR/${base}.json" ]]
 }

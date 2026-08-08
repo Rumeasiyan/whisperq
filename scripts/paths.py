@@ -21,3 +21,20 @@ def list_media():
         if f.lower().endswith(MEDIA_EXTS) and not f.startswith(".")
     ]
     return sorted(files, key=os.path.getsize, reverse=True)
+
+
+def is_done(src):
+    """True when src has already been transcribed and needs no rerun.
+
+    Mirrors is_done() in config.sh -- keep the two in step. Completion is judged
+    on the .json, not the .srt: WhisperX writes the .srt incrementally, so a run
+    killed midway leaves a partial .srt that a size check treats as finished
+    forever. The .json is written once at the end, after diarization.
+
+    FORCE=1 in the environment reprocesses everything.
+    """
+    if os.environ.get("FORCE") == "1":
+        return False
+    base = os.path.splitext(os.path.basename(src))[0]
+    dst = os.path.join(OUTDIR, base + ".json")
+    return os.path.isfile(dst) and os.path.getsize(dst) > 0

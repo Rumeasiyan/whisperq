@@ -5,8 +5,7 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/config.sh"
 
-MODEL="medium"
-LANG="en"
+MODEL="${WQ_MODEL:-medium}"
 # CTranslate2 has no MPS backend, so compute runs on CPU. int8 keeps it fast + low-RAM.
 DEVICE="cpu"
 COMPUTE="int8"
@@ -22,9 +21,17 @@ for f in "${files[@]}"; do
   echo "=============================================="
   echo "Transcribing: $(basename "$f")"
   echo "=============================================="
+  # Only pass --align_model when one is configured; an empty string is not the
+  # same as omitting the flag, and WhisperX would try to load "" as a model.
+  align_args=()
+  if [[ -n "$WQ_ALIGN_MODEL" ]]; then
+    align_args=(--align_model "$WQ_ALIGN_MODEL")
+  fi
+
   whisperx "$f" \
     --model "$MODEL" \
-    --language "$LANG" \
+    --language "$WQ_LANG" \
+    "${align_args[@]+"${align_args[@]}"}" \
     --device "$DEVICE" \
     --compute_type "$COMPUTE" \
     --threads 8 \

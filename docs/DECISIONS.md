@@ -187,3 +187,39 @@ of 2 workers reflects memory, not cores: each worker holds its own model and
 decoded audio.
 
 **Refs.** `scripts/parallel.sh`.
+
+---
+
+## 2026-09-18 — Alignment failure degrades the run instead of aborting it
+
+**Decision.** When `whisperx.load_align_model()` cannot supply a model for the
+configured language, `mps_pipeline.py` logs a warning and continues without
+alignment or diarization, rather than propagating the exception.
+
+**Why.** WhisperX is two systems with two different language sets. Whisper ASR
+covers roughly 99 languages; forced alignment needs a wav2vec2 CTC model per
+language and ships defaults for roughly 40 (`whisperx/alignment.py`). Tamil and
+Sinhala are in the first set and not the second, which is the case that forced
+this decision.
+
+The old failure mode was the expensive kind: `load_align_model` was called
+after the model-loading phase but the `ValueError` surfaced mid-run, so a
+multi-hour ASR pass was already spent before anything told the user the language
+was unsupported. The condition is fully knowable at startup.
+
+Degrading is not free — losing word timestamps means `assign_word_speakers` has
+nothing to attach diarization turns to, so speaker labels disappear entirely.
+That is a real quality loss, not a cosmetic one, which is why the warning is
+repeated across three lines and names the variable that fixes it. Segment-level
+timestamps still come out of the ASR pass, and `build_clean_srt.py` already
+rebuilds cues at segment granularity, so subtitles remain usable.
+
+**Consequences.** An unsupported language now produces quiet output rather than
+a crash, so the warning is the only signal that speaker labels are missing. A
+caller who wants the hard failure back can check for `SPEAKER_` in the output.
+Setting `WQ_ALIGN_MODEL` to any HuggingFace wav2vec2 CTC model restores full
+behaviour; for Tamil, `Harveenchadha/vakyansh-wav2vec2-tamil-tam-250` is
+verified to load with a native-script vocabulary and a `<pad>` blank token,
+which is what WhisperX's trellis decoder expects.
+
+**Refs.** `scripts/mps_pipeline.py` — `load_alignment()`; issue #6.

@@ -44,6 +44,11 @@ cross-platform roadmap and exactly which lines block Linux and Windows.
 | `docs/BUILD_PLAN.md` | Roadmap, including cross-platform support |
 | `input/`, `output/` | Media. Gitignored. Never commit contents |
 
+Batch discovery is **not recursive**: `list_media` uses `find -maxdepth 1`
+(and `os.listdir` in `paths.py`), so media inside a subfolder of `input/` is
+invisible to `transcribe.sh`, `parallel.sh` and argument-less `mps_pipeline.py`.
+Files in subfolders must be passed as explicit arguments.
+
 ## Constraints
 
 Each of these is enforced somewhere in the code and will cause a hard-to-diagnose
@@ -56,6 +61,8 @@ failure if violated.
 | **`DYLD_FALLBACK_LIBRARY_PATH` must point at ffmpeg@7 libs** | torchcodec (pulled in by pyannote 4.x) links against ffmpeg 4–7. Homebrew's default `ffmpeg` is v8. Without this, diarization dies inside a native library with no usable Python traceback. | `scripts/config.sh` |
 | **Target bash 3.2** | macOS ships bash 3.2 (2007) as `/bin/bash`. `mapfile`, `readarray`, `local -n`, and negative array indices are all bash 4+ and fail on a clean Mac. | `scripts/config.sh` — `read_media_into` exists solely for this |
 | **`is_done` keys on `.json`, not `.srt`** | WhisperX writes the `.srt` incrementally. A killed run leaves a partial `.srt` that looks complete, so the file is skipped forever and silently ends up truncated. The `.json` is written once, after diarization. | `scripts/config.sh` and `scripts/paths.py` |
+| **Language config uses `WQ_LANG`, never `LANG`** | `LANG` is the POSIX locale variable, already set to `en_US.UTF-8` in every shell. A bare `${LANG:-en}` silently hands the locale string to WhisperX as a language code. All language settings carry the `WQ_` prefix for this reason. | `scripts/config.sh` |
+| **Whisper and WhisperX support different language sets** | ASR covers ~99 languages; forced alignment ships wav2vec2 defaults for ~40. Tamil (`ta`) and Sinhala (`si`) are in the first, not the second. Without `WQ_ALIGN_MODEL` there are no word timestamps, so `assign_word_speakers` produces no speaker labels. | `scripts/mps_pipeline.py` — `load_alignment()` |
 | **`HF_TOKEN` comes from `.env`, never a literal** | `.env` is gitignored; a hardcoded token would be published. pyannote also requires the model licences accepted on the same HF account or it 401s. | `scripts/config.sh` exits if unset |
 
 ## Commands
@@ -81,6 +88,16 @@ python scripts/build_clean_srt.py   # -> output/transcripts/*.clean.srt
 
 # reprocess everything, ignoring completed work
 FORCE=1 ./scripts/transcribe.sh
+
+# non-English: set the language, and an alignment model if WhisperX lacks one.
+# Without WQ_ALIGN_MODEL, Tamil and Sinhala lose word timestamps and with them
+# every speaker label -- the run does not fail, it quietly comes back unlabelled.
+WQ_LANG=ta WQ_MODEL=large-v3 \
+  WQ_ALIGN_MODEL=Harveenchadha/vakyansh-wav2vec2-tamil-tam-250 \
+  python scripts/mps_pipeline.py
+
+# hard burns need a font covering the script; Helvetica has no Indic glyphs
+WQ_LANG=ta WQ_FONT="Tamil Sangam MN" ./scripts/burn_subs.sh hard
 
 # checks (no test suite exists yet — see docs/BUILD_PLAN.md)
 bash -n scripts/*.sh          # shell syntax
@@ -111,7 +128,7 @@ commands for them until they exist.
 | | |
 |---|---|
 | Canonical source | `VERSION` at repo root |
-| Current version | `1.0.0` |
+| Current version | `1.1.0` |
 | Build number | Not used — no packaged distributable |
 | Scheme | Semantic versioning `MAJOR.MINOR.PATCH` |
 | Cadence | **Bump in the same commit as every completed user-visible change** |

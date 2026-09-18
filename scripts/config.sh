@@ -29,6 +29,45 @@ if [[ -z "${HF_TOKEN:-}" ]]; then
   exit 1
 fi
 
+# Transcription language and models, overridable from .env or the environment.
+#
+# The WQ_ prefix is not decoration: LANG is the POSIX locale variable and is
+# already set to something like en_US.UTF-8 in every normal shell, so a bare
+# ${LANG:-en} would silently hand the locale string to WhisperX as a language
+# code.
+WQ_LANG="${WQ_LANG:-en}"
+
+# Whisper model size. Each script keeps its own default if this is unset, since
+# the sequential and pool entrypoints were tuned differently.
+WQ_MODEL="${WQ_MODEL:-}"
+
+# wav2vec2 CTC model used for forced alignment. Empty means "let WhisperX pick
+# its default for WQ_LANG" -- correct for the ~40 languages it ships defaults
+# for (see whisperx/alignment.py), and a hard ValueError for the rest. Whisper
+# transcribes ~99 languages, so the ASR and alignment language sets are not the
+# same set; anything outside the smaller one must name a model here.
+WQ_ALIGN_MODEL="${WQ_ALIGN_MODEL:-}"
+
+# Subtitle font for hard burns only (soft mux lets the player choose). Helvetica
+# carries no Indic glyphs, so a non-Latin burn renders as tofu boxes unless this
+# names a font that covers the script.
+WQ_FONT="${WQ_FONT:-Helvetica}"
+
+# Exported so the Python scripts see them too -- mps_pipeline.py reads the same
+# three names out of the environment.
+export WQ_LANG WQ_MODEL WQ_ALIGN_MODEL WQ_FONT
+
+# ISO 639-1 -> ISO 639-2/T, for the subtitle track's language metadata. Only the
+# codes actually used here; ffmpeg accepts 639-2 and mislabels anything else.
+lang_iso639_2() {
+  case "$1" in
+    en) echo eng ;;
+    ta) echo tam ;;
+    si) echo sin ;;
+    *)  echo und ;;   # "undetermined" beats a confidently wrong label
+  esac
+}
+
 # torchcodec needs ffmpeg 4-7 shared libs, but brew's default ffmpeg is v8.
 # Point the dynamic loader at the ffmpeg@7 libs.
 FF7LIB="$(brew --prefix ffmpeg@7 2>/dev/null)/lib"

@@ -22,7 +22,7 @@ fi
 
 # Style for hard mode. force_style is libass syntax; PrimaryColour is &HBBGGAA
 # (blue-green-red), NOT RGB -- &H00FFFFFF is opaque white.
-SUB_STYLE="FontName=Helvetica,FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=30"
+SUB_STYLE="FontName=${WQ_FONT},FontSize=18,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=30"
 
 read_media_into FILES
 echo "Mode: $MODE. ${#FILES[@]} candidate files."
@@ -58,7 +58,7 @@ for src in "${FILES[@]}"; do
     ffmpeg -nostdin -y -i "$src" -i "$srt" \
       -map 0 -map 1 \
       -c copy -c:s mov_text \
-      -metadata:s:s:0 language=eng \
+      -metadata:s:s:0 "language=$(lang_iso639_2 "$WQ_LANG")" \
       "$part"
   else
     # subtitles= filter needs the path escaped: ':' and ',' are filter syntax.

@@ -27,8 +27,14 @@ worker() {
       continue
     fi
     echo "[w$wid] START: $base"
+    local align_args=()
+    if [[ -n "$WQ_ALIGN_MODEL" ]]; then
+      align_args=(--align_model "$WQ_ALIGN_MODEL")
+    fi
     whisperx "$f" \
-      --model large-v3 --language en --device cpu --compute_type int8 \
+      --model "${WQ_MODEL:-large-v3}" --language "$WQ_LANG" \
+      "${align_args[@]+"${align_args[@]}"}" \
+      --device cpu --compute_type int8 \
       --diarize --hf_token "$HF_TOKEN" \
       --output_dir "$OUTDIR" --output_format all --print_progress True \
       > "$OUTDIR/_w${wid}_${base}.log" 2>&1

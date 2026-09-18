@@ -38,6 +38,7 @@ cross-platform roadmap and exactly which lines block Linux and Windows.
 | `scripts/transcribe.sh` | Sequential CPU transcription, one file at a time |
 | `scripts/parallel.sh` | N-worker pool, atomic `mkdir` locks |
 | `scripts/mps_pipeline.py` | The fast path: CPU ASR + MPS diarization |
+| `scripts/normalize_audio.sh` | Levels quiet/uneven audio before transcription -> `output/normalized/*.wav` |
 | `scripts/build_clean_srt.py` | Converts raw word-level `.srt` into readable segment-level `.clean.srt` |
 | `scripts/burn_subs.sh` | Attaches `.clean.srt` to video (soft-mux or hard burn) |
 | `docs/DECISIONS.md` | Why the architecture is the way it is |
@@ -80,6 +81,9 @@ cp .env.example .env          # paste HF token
 ./scripts/transcribe.sh       # sequential, CPU
 ./scripts/parallel.sh 2       # 2-worker pool, CPU
 python scripts/mps_pipeline.py  # CPU ASR + MPS diarization (fastest)
+
+# level quiet or uneven audio first (writes output/normalized/*.wav)
+./scripts/normalize_audio.sh input/industries/*.m4a
 
 # post-process
 python scripts/build_clean_srt.py   # -> output/transcripts/*.clean.srt
@@ -128,7 +132,7 @@ commands for them until they exist.
 | | |
 |---|---|
 | Canonical source | `VERSION` at repo root |
-| Current version | `1.1.0` |
+| Current version | `1.2.0` |
 | Build number | Not used — no packaged distributable |
 | Scheme | Semantic versioning `MAJOR.MINOR.PATCH` |
 | Cadence | **Bump in the same commit as every completed user-visible change** |

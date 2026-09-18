@@ -3,6 +3,28 @@
 Notable changes to WhisperQ. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-09-18
+
+### Added
+- `scripts/normalize_audio.sh` — levels recordings whose speech volume swings
+  too widely for the pipeline to handle, writing 16 kHz mono WAVs to
+  `output/normalized/`. Chain is
+  `highpass -> afftdn -> speechnorm -> loudnorm -> alimiter`, overridable via
+  `WQ_FILTERS`.
+
+  The industry recordings that prompted this measured -22 to -32 LUFS with a
+  loudness range of 18.5-22.5 LU, against the ~7 LU typical of broadcast
+  speech, and true peaks above 0 dBFS on all four. That is quiet speech next to
+  full-scale transients, so a flat gain increase cannot help — it would only
+  clip the peaks harder. `speechnorm` expands the quiet passages instead, and
+  `loudnorm` lands every file on the same target so the pipeline stops behaving
+  differently on each one. Measured result: all four converge to a mean of
+  roughly -23 dB with peaks at -1.6 dB.
+
+  `afftdn` runs before the expansion deliberately: raising quiet passages also
+  raises background hiss, and amplified near-silence is a known trigger for
+  Whisper emitting text over nothing.
+
 ## [1.1.0] — 2026-09-18
 
 ### Added

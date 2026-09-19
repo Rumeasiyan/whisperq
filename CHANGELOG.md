@@ -3,6 +3,36 @@
 Notable changes to WhisperQ. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] — 2026-09-19
+
+### Added
+- `scripts/assemblyai_transcribe.py` — an opt-in hosted ASR path that returns
+  transcription and speaker labels in one request, as an alternative to the
+  local CPU pipeline.
+
+  ASR is the only slow stage locally: measured at 1.29x realtime for `large-v3`
+  on this machine, so the 15.3-hour module 03 batch is roughly 20 hours of
+  saturated CPU, against minutes for MPS diarization and seconds for alignment.
+  At current pricing the same batch costs about $3.52 hosted.
+
+  Whisper does not diarize at any provider, so a cheaper Whisper API (Groq at
+  $0.61 for this batch) would return unlabelled text and require a hybrid:
+  hosted ASR for word timestamps plus local pyannote plus the existing merge.
+  A provider with built-in diarization removes that code path entirely, which
+  is worth more than the $3 difference at this batch size.
+
+  Output is written in the existing shape, so `build_clean_srt.py` and
+  `burn_subs.sh` work downstream unchanged. Speaker ids are normalised from
+  AssemblyAI's `A`/`B`/`C` to the `SPEAKER_00` form the local pipeline emits.
+
+  This uploads audio to a third party and is therefore a separate script rather
+  than a flag on the local pipeline — it has to be invoked deliberately. Audio
+  is extracted to 16 kHz mono Opus first (45 MB for the whole batch) and the
+  temporary copy is deleted once the upload completes.
+
+- `ASSEMBLYAI_API_KEY` and `WQ_AAI_MODEL` in `.env.example`, both optional and
+  unused by the local path.
+
 ## [1.2.0] — 2026-09-18
 
 ### Added

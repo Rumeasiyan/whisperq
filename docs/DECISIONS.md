@@ -223,3 +223,49 @@ verified to load with a native-script vocabulary and a `<pad>` blank token,
 which is what WhisperX's trellis decoder expects.
 
 **Refs.** `scripts/mps_pipeline.py` — `load_alignment()`; issue #6.
+
+---
+
+## 2026-09-19 — Hosted ASR is a separate script, not a flag
+
+**Decision.** `scripts/assemblyai_transcribe.py` is its own entrypoint. The
+local pipeline gained no `--remote` flag and no environment switch that would
+route it to a hosted backend.
+
+**Why.** ASR is the only slow stage. Measured on this machine, `large-v3` runs
+at 1.29x realtime, so the 15.3-hour module 03 batch is about 20 hours of
+saturated CPU; MPS diarization is minutes for the same batch and alignment is
+seconds. Hosted ASR collapses the 20 hours and costs a few dollars, so the
+capability is worth having.
+
+What it is not worth is being reachable by accident. This script uploads
+recording audio to a third party. The recordings are third-party copyright and
+contain identifiable student and lecturer speech, and an upload cannot be
+undone — the provider may retain, cache or log the audio regardless of anything
+this repo does afterwards. A flag on `mps_pipeline.py` would put that one
+mistyped environment variable away from a default-local run, and the failure
+would be silent and irreversible. A separate script has to be typed on purpose.
+
+AssemblyAI was chosen over the cheaper Whisper APIs because Whisper does not
+diarize at any provider. Groq would cost $0.61 against AssemblyAI's $3.52 for
+this batch, but would return unlabelled text and require a hybrid path: hosted
+ASR for word timestamps, local pyannote for turns, then the existing merge.
+Speaker labels are the reason this project exists rather than a plain WhisperX
+invocation, so the $3 buys away a whole code path rather than a convenience.
+
+**Consequences.** Two transcription backends now produce `output/transcripts/`
+content, and they will not agree exactly — different ASR models and different
+diarizers segment differently, so re-running a file through the other backend
+changes the transcript. `is_done` cannot tell which backend produced a `.json`.
+Speaker ids are normalised from AssemblyAI's `A`/`B`/`C` to `SPEAKER_00` so
+downstream code cannot tell them apart either; that is deliberate for
+`build_clean_srt.py`, but it does mean the provenance of a transcript is not
+recorded anywhere. If that matters later, the `.json` is the place to record it.
+
+Consent is per batch. The repo owner opted in for module 03 specifically, and
+that is not standing permission for future batches. Provider retention and
+training-data policy has not been reviewed against the university's agreement;
+that remains open, alongside #4.
+
+**Refs.** `scripts/assemblyai_transcribe.py`; issue #10.
+

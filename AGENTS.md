@@ -39,6 +39,7 @@ cross-platform roadmap and exactly which lines block Linux and Windows.
 | `scripts/parallel.sh` | N-worker pool, atomic `mkdir` locks |
 | `scripts/mps_pipeline.py` | The fast path: CPU ASR + MPS diarization |
 | `scripts/normalize_audio.sh` | Levels quiet/uneven audio before transcription -> `output/normalized/*.wav` |
+| `scripts/assemblyai_transcribe.py` | Opt-in hosted ASR + diarization. **Uploads audio off the machine** |
 | `scripts/build_clean_srt.py` | Converts raw word-level `.srt` into readable segment-level `.clean.srt` |
 | `scripts/burn_subs.sh` | Attaches `.clean.srt` to video (soft-mux or hard burn) |
 | `docs/DECISIONS.md` | Why the architecture is the way it is |
@@ -64,6 +65,7 @@ failure if violated.
 | **`is_done` keys on `.json`, not `.srt`** | WhisperX writes the `.srt` incrementally. A killed run leaves a partial `.srt` that looks complete, so the file is skipped forever and silently ends up truncated. The `.json` is written once, after diarization. | `scripts/config.sh` and `scripts/paths.py` |
 | **Language config uses `WQ_LANG`, never `LANG`** | `LANG` is the POSIX locale variable, already set to `en_US.UTF-8` in every shell. A bare `${LANG:-en}` silently hands the locale string to WhisperX as a language code. All language settings carry the `WQ_` prefix for this reason. | `scripts/config.sh` |
 | **Whisper and WhisperX support different language sets** | ASR covers ~99 languages; forced alignment ships wav2vec2 defaults for ~40. Tamil (`ta`) and Sinhala (`si`) are in the first, not the second. Without `WQ_ALIGN_MODEL` there are no word timestamps, so `assign_word_speakers` produces no speaker labels. | `scripts/mps_pipeline.py` — `load_alignment()` |
+| **Hosted ASR is opt-in and per-batch** | `assemblyai_transcribe.py` uploads recording audio to a third party. Recordings are third-party copyright and identifiable speech, and an upload cannot be undone. It is a separate script, never a flag on the local pipeline, so it cannot be reached by accident. Consent is per batch, not standing. | `scripts/assemblyai_transcribe.py` exits if `ASSEMBLYAI_API_KEY` is unset |
 | **`HF_TOKEN` comes from `.env`, never a literal** | `.env` is gitignored; a hardcoded token would be published. pyannote also requires the model licences accepted on the same HF account or it 401s. | `scripts/config.sh` exits if unset |
 
 ## Commands
@@ -84,6 +86,10 @@ python scripts/mps_pipeline.py  # CPU ASR + MPS diarization (fastest)
 
 # level quiet or uneven audio first (writes output/normalized/*.wav)
 ./scripts/normalize_audio.sh input/industries/*.m4a
+
+# hosted alternative: transcription + diarization in one request.
+# UPLOADS AUDIO OFF THIS MACHINE. Needs ASSEMBLYAI_API_KEY in .env.
+python scripts/assemblyai_transcribe.py "input/module 03 - The Entrepreneurial Mindset"/*.mp4
 
 # post-process
 python scripts/build_clean_srt.py   # -> output/transcripts/*.clean.srt
@@ -132,7 +138,7 @@ commands for them until they exist.
 | | |
 |---|---|
 | Canonical source | `VERSION` at repo root |
-| Current version | `1.2.0` |
+| Current version | `1.3.0` |
 | Build number | Not used — no packaged distributable |
 | Scheme | Semantic versioning `MAJOR.MINOR.PATCH` |
 | Cadence | **Bump in the same commit as every completed user-visible change** |

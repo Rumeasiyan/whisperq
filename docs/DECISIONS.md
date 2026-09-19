@@ -187,3 +187,85 @@ of 2 workers reflects memory, not cores: each worker holds its own model and
 decoded audio.
 
 **Refs.** `scripts/parallel.sh`.
+
+---
+
+## 2026-09-18 — Alignment failure degrades the run instead of aborting it
+
+**Decision.** When `whisperx.load_align_model()` cannot supply a model for the
+configured language, `mps_pipeline.py` logs a warning and continues without
+alignment or diarization, rather than propagating the exception.
+
+**Why.** WhisperX is two systems with two different language sets. Whisper ASR
+covers roughly 99 languages; forced alignment needs a wav2vec2 CTC model per
+language and ships defaults for roughly 40 (`whisperx/alignment.py`). Tamil and
+Sinhala are in the first set and not the second, which is the case that forced
+this decision.
+
+The old failure mode was the expensive kind: `load_align_model` was called
+after the model-loading phase but the `ValueError` surfaced mid-run, so a
+multi-hour ASR pass was already spent before anything told the user the language
+was unsupported. The condition is fully knowable at startup.
+
+Degrading is not free — losing word timestamps means `assign_word_speakers` has
+nothing to attach diarization turns to, so speaker labels disappear entirely.
+That is a real quality loss, not a cosmetic one, which is why the warning is
+repeated across three lines and names the variable that fixes it. Segment-level
+timestamps still come out of the ASR pass, and `build_clean_srt.py` already
+rebuilds cues at segment granularity, so subtitles remain usable.
+
+**Consequences.** An unsupported language now produces quiet output rather than
+a crash, so the warning is the only signal that speaker labels are missing. A
+caller who wants the hard failure back can check for `SPEAKER_` in the output.
+Setting `WQ_ALIGN_MODEL` to any HuggingFace wav2vec2 CTC model restores full
+behaviour; for Tamil, `Harveenchadha/vakyansh-wav2vec2-tamil-tam-250` is
+verified to load with a native-script vocabulary and a `<pad>` blank token,
+which is what WhisperX's trellis decoder expects.
+
+**Refs.** `scripts/mps_pipeline.py` — `load_alignment()`; issue #6.
+
+---
+
+## 2026-09-19 — Hosted ASR is a separate script, not a flag
+
+**Decision.** `scripts/assemblyai_transcribe.py` is its own entrypoint. The
+local pipeline gained no `--remote` flag and no environment switch that would
+route it to a hosted backend.
+
+**Why.** ASR is the only slow stage. Measured on this machine, `large-v3` runs
+at 1.29x realtime, so the 15.3-hour module 03 batch is about 20 hours of
+saturated CPU; MPS diarization is minutes for the same batch and alignment is
+seconds. Hosted ASR collapses the 20 hours and costs a few dollars, so the
+capability is worth having.
+
+What it is not worth is being reachable by accident. This script uploads
+recording audio to a third party. The recordings are third-party copyright and
+contain identifiable student and lecturer speech, and an upload cannot be
+undone — the provider may retain, cache or log the audio regardless of anything
+this repo does afterwards. A flag on `mps_pipeline.py` would put that one
+mistyped environment variable away from a default-local run, and the failure
+would be silent and irreversible. A separate script has to be typed on purpose.
+
+AssemblyAI was chosen over the cheaper Whisper APIs because Whisper does not
+diarize at any provider. Groq would cost $0.61 against AssemblyAI's $3.52 for
+this batch, but would return unlabelled text and require a hybrid path: hosted
+ASR for word timestamps, local pyannote for turns, then the existing merge.
+Speaker labels are the reason this project exists rather than a plain WhisperX
+invocation, so the $3 buys away a whole code path rather than a convenience.
+
+**Consequences.** Two transcription backends now produce `output/transcripts/`
+content, and they will not agree exactly — different ASR models and different
+diarizers segment differently, so re-running a file through the other backend
+changes the transcript. `is_done` cannot tell which backend produced a `.json`.
+Speaker ids are normalised from AssemblyAI's `A`/`B`/`C` to `SPEAKER_00` so
+downstream code cannot tell them apart either; that is deliberate for
+`build_clean_srt.py`, but it does mean the provenance of a transcript is not
+recorded anywhere. If that matters later, the `.json` is the place to record it.
+
+Consent is per batch. The repo owner opted in for module 03 specifically, and
+that is not standing permission for future batches. Provider retention and
+training-data policy has not been reviewed against the university's agreement;
+that remains open, alongside #4.
+
+**Refs.** `scripts/assemblyai_transcribe.py`; issue #10.
+

@@ -13,6 +13,33 @@ SUBDIR = os.path.join(ROOT, "output", "subbed")
 MEDIA_EXTS = (".mp4", ".m4a", ".mov", ".mkv", ".wav", ".mp3", ".webm")
 
 
+def load_env():
+    """Load .env into os.environ, without overwriting anything already set.
+
+    config.sh does this for the shell entrypoints, but mps_pipeline.py is run
+    directly (python scripts/mps_pipeline.py) and so never passes through it.
+    Without this, HF_TOKEN and the WQ_* settings only reach the Python path if
+    the caller exported them by hand. Values already in the environment win, so
+    an inline override still beats the file.
+    """
+    path = os.path.join(ROOT, ".env")
+    if not os.path.isfile(path):
+        return
+    with open(path) as fh:
+        for line in fh:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if line.startswith("export "):
+                line = line[len("export "):]
+            key, sep, val = line.partition("=")
+            if not sep:
+                continue
+            key = key.strip()
+            val = val.strip().strip("'\"")
+            os.environ.setdefault(key, val)
+
+
 def list_media():
     """All media files in input/, largest-first."""
     files = [

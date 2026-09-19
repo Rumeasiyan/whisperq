@@ -9,3 +9,4 @@
 whisperx==3.8.6
 torch==2.8.0
 torchaudio==2.8.0
+requests
